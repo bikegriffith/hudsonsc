@@ -1,0 +1,8 @@
+Super market kata
+------------------
+Calculate Item Prices
+ * chips $3 -- base price per unit quantity
+ * apples $2/pound -- base price per unit weight
+ * cereal 4/$10 -- price levels
+ * ice cream: buy 2 get 1 free -- base price per unit - $x discount
+
