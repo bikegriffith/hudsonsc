@@ -32,7 +32,7 @@ class StrategyInterface(object):
     def price_for(self, pricing, units):
         raise NotImplementedError
 
-    def discount_for(self, total_units):
+    def discount_for(self, pricing, total_units):
         """ Given a total number of units in the cart, return a discount """
         return 0
 
@@ -48,9 +48,19 @@ class BasePriceWithDiscountAfterXItems(BasePricePerUnitStrategy, _DataObject):
     discount = None
     break_point = None
 
-    def discount_for(self, total_units):
+    def discount_for(self, pricing, total_units):
         if total_units % self.break_point == 0:
             return self.discount * total_units
+
+
+class BuyXGetYFreeStrategy(BasePricePerUnitStrategy, _DataObject):
+
+    x = None
+    y = None
+
+    def discount_for(self, pricing, total_units):
+        if total_units % (self.x + 1) == 0:
+            return self.y * pricing.base_price
 
 
 class InventoryAdapter(object):
@@ -69,7 +79,10 @@ class InventoryAdapter(object):
                       strategy=BasePriceWithDiscountAfterXItems(discount=Decimal('0.50'), break_point=4),
                       pricing=Pricing(base_price=Decimal('3.00'), unit='each'),
                       sku=10003),
-        'ice cream': Item()
+        'ice_cream': Item(name='Ice Cream',
+                      strategy=BuyXGetYFreeStrategy(x=2, y=1),
+                      pricing=Pricing(base_price=Decimal('4.00'), unit='each'),
+                      sku=10004)
         }
 
     def by_sku(self, sku):
@@ -104,7 +117,7 @@ class Register(object):
 
             current_total = total_units.setdefault(item.sku, 0)
             total_units[item.sku] += units
-            discount = item.strategy.discount_for(total_units[item.sku])
+            discount = item.strategy.discount_for(item.pricing, total_units[item.sku])
             if discount:
                 total_discount = total_discounts.setdefault(item.sku, 0)
                 this_discount = discount - total_discount
@@ -129,9 +142,11 @@ class TestPricingOneItem(object):
     def setup(self):
         self.inventory = InventoryAdapter()
         self.register = Register(self.inventory)
+
         self.chips = self.inventory.by_name('chips')
         self.apples = self.inventory.by_name('apples')
         self.cereal = self.inventory.by_name('cereal')
+        self.ice_cream = self.inventory.by_name('ice_cream')
 
     def test_should_price_1_bag_of_chips_at_3(self):
         self.register.add_item(self.chips.sku, 1)
@@ -205,4 +220,17 @@ class TestPricingOneItem(object):
                                   "* Discount  -$2.00\n"\
                                   "------------\n"\
                                   "Total  $20.00")
+
+    def test_should_get_3rd_ice_cream_free(self):
+        self.register.add_item(self.ice_cream.sku, 1)
+        self.register.add_item(self.ice_cream.sku, 1)
+        self.register.add_item(self.ice_cream.sku, 1)
+        receipt = self.register.print_receipt()
+        NT.assert_equals(receipt, "Ice Cream  $4.00\n"\
+                                  "Ice Cream  $4.00\n"\
+                                  "Ice Cream  $4.00\n"\
+                                  "* Discount  -$4.00\n"\
+                                  "------------\n"\
+                                  "Total  $8.00")
+
 
